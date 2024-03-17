@@ -8,7 +8,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-const int BUFFER_SIZE = 2;
+const int BUFFER_SIZE = 128;
 
 const char *input_fifo = "input_fifo";
 const char *output_fifo = "output_fifo";

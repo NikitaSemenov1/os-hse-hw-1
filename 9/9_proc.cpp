@@ -9,7 +9,7 @@
 const char *input_fifo = "input_fifo";
 const char *output_fifo = "output_fifo";
 
-const int BUFFER_SIZE = 3;
+const int BUFFER_SIZE = 128;
 
 void PerfromAction(char *buf, int len) {
     for (char *c = buf; c != buf + len; c++) {
