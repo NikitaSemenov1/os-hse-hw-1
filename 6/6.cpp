@@ -1,0 +1,134 @@
+#include <csignal>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <fcntl.h>
+#include <string>
+#include <sys/wait.h>
+#include <unistd.h>
+
+const int BUFFER_SIZE = 5000;
+
+void PerfromAction(char *buf, int len) {
+    for (char *c = buf; c != buf + len; c++) {
+
+        if (isupper(*c)) {
+            *c = tolower(*c);
+        } else if (islower(*c)) {
+            *c = toupper(*c);
+        }
+    }
+}
+
+int io_fd[2];
+int io_pid;
+
+void Processor() {
+
+    char buf[BUFFER_SIZE];
+
+    int r = read(io_fd[0], buf, BUFFER_SIZE);
+
+    if (r == -1) {
+        perror( "Can't read from input channel");
+        exit(1);
+    }
+
+    PerfromAction(buf, r);
+
+    write(io_fd[1], buf, r);
+
+    if (kill(io_pid, SIGUSR1) != 0) {
+        perror("kill");
+        exit(1);
+    }
+}
+
+void Usr1Handle(int) {
+    // dummy, just to awake sigwait
+}
+
+void IO(const char *input_filename, const char *output_filename) {
+
+    int read_file_fd = open(input_filename, O_RDONLY);
+
+    if (read_file_fd == -1) {
+        perror("Can't open read file");
+        exit(1);
+    }
+
+    char buf[BUFFER_SIZE];
+
+    int r = read(read_file_fd, buf, BUFFER_SIZE);
+
+    if (r == -1) {
+        perror("Can't read from input file");
+        exit(1);
+    }
+
+    if (write(io_fd[1], buf, r) == -1) {
+        perror("Error writing to input channel");
+        exit(1);
+    };
+
+    sigset_t sigset;
+    sigemptyset(&sigset);
+
+    sigaddset(&sigset, SIGUSR1);
+    int sig;
+    if (sigwait(&sigset, &sig) != 0) {
+        perror("sigwait");
+        exit(1);
+    }
+
+    int write_file_fd = open(output_filename, O_WRONLY);
+    if (write_file_fd == -1) {
+        perror("Can't open output file");
+        exit(1);
+    }
+    r = read(io_fd[0], buf, BUFFER_SIZE);
+
+    if (r == -1) {
+        perror("Can't read from output channel");
+        exit(1);
+    }
+
+    write(write_file_fd, buf, r);
+}
+
+int main(int argc, char *argv[]) {
+
+    if (argc != 3) {
+        puts("The program expects two arguments - the filenames of the input and output file respectively");
+
+        return 0;
+    }
+
+    pipe(io_fd);
+
+    signal(SIGUSR1, Usr1Handle);
+
+    if (int io_fork_ret = fork()) {
+        if (io_fork_ret == -1) {
+
+            perror("error creating IO process\n");
+
+            strerror(errno);
+            exit(1);
+        }
+
+        // processor process
+
+        io_pid = io_fork_ret;
+
+        Processor();
+
+        wait(nullptr);
+    } else {
+        // IO process
+
+        IO(argv[1], argv[2]);
+    }
+
+    return 0;
+}
